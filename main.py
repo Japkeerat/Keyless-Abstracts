@@ -39,7 +39,7 @@ if __name__ == '__main__':
     create_folder(os.path.join(os.getcwd(), 'logs'))
     logging.basicConfig(filename='logs/DataCuration.log',
                         filemode='w',
-                        level=logging.DEBUG,
+                        level=logging.INFO,
                         format='%(filename)s: '
                                '%(levelname)s: '
                                '%(funcName)s(): '
