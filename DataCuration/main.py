@@ -1,93 +1,119 @@
 import logging
 import os
+import time
 
 import pandas as pd
-from selenium import webdriver
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions
+import requests
 from bs4 import BeautifulSoup
+from tqdm.cli import tqdm
+
+_batch = 0
 
 
-def start_driver(driver_exe):
-    options = webdriver.ChromeOptions()
-    options.add_argument('--headless')
-    path = os.path.join(os.getcwd(), 'Data', 'Driver', driver_exe)
-    driver = webdriver.Edge(path)
-    return driver
+def get_content(url):
+    response = requests.get(url)
+    status_code = int(response.status_code)
+    print(url, status_code)
+    if status_code != 200:
+        logging.info("GET request for URL {} returned status code of {}".format(url, status_code))
+        return None, status_code
+    content = BeautifulSoup(response.text, 'html.parser')
+    return content, status_code
 
 
-def visit_url(driver, url):
-    driver.get(url)
-    WebDriverWait(driver, timeout=10).until(expected_conditions.presence_of_element_located((By.CLASS_NAME, 'arxiv')))
-    return driver
+def extract_subjects(url):
+    content, status_code = get_content(url)
+    if status_code != 200:
+        return list()
+    urls = content.find_all('a')
+    urls = [x.get('href') for x in urls if '/archive/' in str(x)]
+    urls = [url+x for x in urls]
+    return urls
 
 
-def fill_conditions(driver):
-    """
-    For a conditional search, execute click on checkboxes and relevant fields.
-    :param driver:
-    :return:
-    """
-    pass
+def find_title(content):
+    title = content.find_all('h1', attrs={'class': 'title'})[0]
+    data = title.text.split('\n')[-1]
+    return data
 
 
-def submit_form(driver):
-    button = driver.find_elements_by_class_name('button')
-    button[4].click()
-    return driver
+def find_abstract(content):
+    abstract = content.find_all('blockquote', attrs={'class': 'abstract'})[0]
+    abstract = abstract.text.split('\nAbstract: ')[-1]
+    return abstract
 
 
-def save_info(titles, abstracts, batch):
-    data = {
-        'Title': titles,
-        'Abstract': abstracts,
+def find_subject(content):
+    subject = content.find_all('span', attrs={'class': 'primary-subject'})[0]
+    subject = subject.text.split('\n')[-1]
+    return subject
+
+
+def save_curated_data(content, batch):
+    df = pd.DataFrame(content)
+    root_path = os.path.join(os.getcwd(), 'Curated_Data')
+    if not os.path.exists(root_path):
+        os.makedirs(root_path)
+    df.to_csv(os.path.join(root_path, 'curated_dataset_{}.csv'.format(batch)), index=False)
+
+
+def extract_arxiv_links(arxiv_url, url, batch):
+    content, status_code = get_content(url)
+    if status_code != 200:
+        return
+    urls = content.find_all('a')
+    urls = [x.get('href') for x in urls if '/abs/' in str(x)]
+    urls = [arxiv_url+x for x in urls]
+    time.sleep(1)
+    curated_data = {
+        'Title': [],
+        'Abstract': [],
+        'URL': [],
+        'Subjects': [],
     }
-    df = pd.DataFrame(data)
-    path = os.path.join(os.getcwd(), 'results')
-    if not os.path.exists(path):
-        os.makedirs(path)
-    file = os.path.join(path, 'output_df_{}.csv'.format(batch))
-    df.to_csv(file, index=False)
+    for idx, url in enumerate(urls):
+        if idx % 4 == 0:
+            time.sleep(1)
+        content, status_code = get_content(url)
+        if status_code == 200:
+            title = find_title(content)
+            abstract = find_abstract(content)
+            subject = find_subject(content)
+            curated_data['Title'].append(title)
+            curated_data['Abstract'].append(abstract)
+            curated_data['URL'].append(url)
+            curated_data['Subjects'].append(subject)
+    save_curated_data(curated_data, batch)
 
 
-def download_abstracts(driver, batch):
-    content = BeautifulSoup(driver.page_source, 'html.parser')
-    data = content.find_all('span', attrs={'class': 'abstract-full'})
-    abstracts = [d.text for d in data]
-    abstracts = [' '.join(abstract.split()[:-2]) for abstract in abstracts]
-    data = content.find_all('p', attrs={'class': 'title'})
-    titles = [d.text for d in data]
-    titles = [title.strip() for title in titles]
-    save_info(titles, abstracts, batch)
+def extract_content_list_wise(arxiv_url, url):
+    global _batch
+    content, status_code = get_content(url)
+    if status_code != 200:
+        return
+    urls = content.find_all('a')
+    urls = [x.get('href') for x in urls if '/list/' in str(x)]
+    urls = [arxiv_url+x for x in urls]
+    for url in urls:
+        _batch += 1
+        extract_arxiv_links(arxiv_url, url, _batch)
 
 
-def next_page_exists(driver):
-    content = BeautifulSoup(driver.page_source, 'html.parser')
-    try:
-        data = content.find_all('a', attrs={'class': 'pagination-next'})
-    except:
-        logging.error('The end')
-        return False
-    if len(data) == 0:
-        return False
-    return True
+def extract_content_year_wise(arxiv_url, url):
+    content, status_code = get_content(url)
+    if status_code != 200:
+        return
+    urls = content.find_all('a')
+    urls = [x.get('href') for x in urls if '/year/' in str(x)]
+    urls = [arxiv_url+x for x in urls]
+    for url in urls:
+        extract_content_list_wise(arxiv_url, url)
 
 
-def go_to_next_page(driver):
-    button = driver.find_element_by_class_name('pagination-next')
-    button.click()
-    return driver
-
-
-def start_webscrape(config):
-    driver = start_driver(config['WebDriver'])
-    driver = visit_url(driver, config['Arxiv_Website'])
-    driver = submit_form(driver)
-    page_number = 1
-    download_abstracts(driver, page_number)
-    while next_page_exists(driver):
-        driver = go_to_next_page(driver)
-        page_number += 1
-        download_abstracts(driver, page_number)
-    print(driver.current_url)
+def start_web_scrape(config):
+    url_list = extract_subjects(config['Arxiv_Website'])
+    print(url_list)
+    if len(url_list) != 0:
+        for url in tqdm(url_list):
+            extract_content_year_wise(config['Arxiv_Website'], url)
+    pass

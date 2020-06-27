@@ -1,9 +1,10 @@
 import logging
 import os
+
 import yaml
 
+from DataCuration.main import start_web_scrape
 from util import create_folder
-from DataCuration.main import start_webscrape
 
 
 def load_config():
@@ -32,7 +33,7 @@ def verify_configurations(conf: dict):
 def main():
     config = load_config()
     verify_configurations(config)
-    start_webscrape(config)
+    start_web_scrape(config)
 
 
 if __name__ == '__main__':
