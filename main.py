@@ -3,7 +3,7 @@ import os
 
 import yaml
 
-from DataCuration.main import start_web_scrape
+from DataCuration.main import main as start_web_scrape
 from util import create_folder
 
 
@@ -41,7 +41,8 @@ if __name__ == '__main__':
     logging.basicConfig(filename='logs/DataCuration.log',
                         filemode='w',
                         level=logging.INFO,
-                        format='%(filename)s: '
+                        format='%(asctime)s: '
+                               '%(filename)s: '
                                '%(levelname)s: '
                                '%(funcName)s(): '
                                '%(lineno)d:\t'
