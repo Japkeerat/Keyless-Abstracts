@@ -1,0 +1,9 @@
+WebDriver: msedgedriver.exe
+
+Arxiv_Website: http://export.arxiv.org
+
+# Subjects for which papers need to be curated. Write the exact name as shown on arxiv website corresponding to the
+# bullets. Must be a list. If the list contains word 'all' then all papers will be curated irrespective of the subject
+# The fields are case insensitive
+Subjects:
+  - all

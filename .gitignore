@@ -1,1 +1,7 @@
 .idea
+*__pycache__
+Data
+logs
+results
+*/.ipynb_checkpoints
+Curated_Data
