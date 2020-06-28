@@ -12,20 +12,31 @@ from util import create_folder
 _batch = 0
 
 
-def get_content(url):
+def verify_url(url, website):
+    return True if url in website else False
+
+
+def get_content(url, main_url=None):
     """
     Gets the content of the website parsed using html parser using Beautiful Soup.
 
     :param url: URL to be parsed for.
+    :param main_url Website from which data is being extracted
     :return: html code of the website and status code while accessing the website.
     """
-    response = requests.get(url)
-    status_code = int(response.status_code)
-    if status_code != 200:
-        logging.info("GET request for URL {} returned status code of {}".format(url, status_code))
-        return None, status_code
-    content = BeautifulSoup(response.text, 'html.parser')
-    return content, status_code
+    use = True
+    if main_url is not None:
+        use = verify_url(url, main_url)
+    logging.info("Requesting for {}".format(url))
+    if use:
+        response = requests.get(url)
+        status_code = int(response.status_code)
+        if status_code != 200:
+            logging.info("GET request for URL {} returned status code of {}".format(url, status_code))
+            return None, status_code
+        content = BeautifulSoup(response.text, 'html.parser')
+        return content, status_code
+    return None, 404
 
 
 def extract_subjects(url):
@@ -85,7 +96,7 @@ def save_curated_data(content: dict, batch: int):
     df.to_csv(os.path.join(root_path, 'curated_dataset_{}.csv'.format(batch)), index=False)
 
 
-def start_curation(urls: list):
+def start_curation(urls: list, arxiv_url):
     """
     Curates data from the webpages from a given list of urls
     """
@@ -98,7 +109,7 @@ def start_curation(urls: list):
     for idx, url in enumerate(urls):
         if idx % 4 == 0:
             time.sleep(1)
-        content, status_code = get_content(url)
+        content, status_code = get_content(url, main_url=arxiv_url)
         if status_code == 200:
             title = find_title(content)
             abstract = find_abstract(content)
@@ -110,6 +121,13 @@ def start_curation(urls: list):
     return curated_data
 
 
+def extract_all_tag_link(arxiv_url, content):
+    urls = content.find_all('a')
+    url = [x.get('href') for x in urls if '?show=' in str(x)][0]
+    url = arxiv_url + url
+    return url
+
+
 def extract_arxiv_links(arxiv_url, url, batch):
     """
     Responsible for extracting arxiv links from the website
@@ -117,11 +135,18 @@ def extract_arxiv_links(arxiv_url, url, batch):
     content, status_code = get_content(url)
     if status_code != 200:
         return
+    url = extract_all_tag_link(arxiv_url, content)
+    if 'pastweek' in url:
+        raise AttributeError("Found wrong URL")
+
+    content, status_code = get_content(url)
+    if status_code != 200:
+        return
     urls = content.find_all('a')
     urls = [x.get('href') for x in urls if '/abs/' in str(x)]
     urls = [arxiv_url+x for x in urls]
     time.sleep(1)
-    curated_data = start_curation(urls)
+    curated_data = start_curation(urls, arxiv_url)
     save_curated_data(curated_data, batch)
 
 
@@ -132,6 +157,7 @@ def extract_content_list_wise(arxiv_url, url):
         return
     urls = content.find_all('a')
     urls = [x.get('href') for x in urls if '/list/' in str(x)]
+    urls = [url for url in urls if 'recent' not in url]
     urls = [arxiv_url+x for x in urls]
     for url in urls:
         _batch += 1
