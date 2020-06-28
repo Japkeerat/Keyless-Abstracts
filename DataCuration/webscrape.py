@@ -12,21 +12,20 @@ from util import create_folder
 _batch = 0
 
 
-def verify_url(url, website):
-    return True if url in website else False
+def verify_url(url):
+    if url.count('//') == 1:
+        return True
+    return False
 
 
-def get_content(url, main_url=None):
+def get_content(url):
     """
     Gets the content of the website parsed using html parser using Beautiful Soup.
 
     :param url: URL to be parsed for.
-    :param main_url Website from which data is being extracted
     :return: html code of the website and status code while accessing the website.
     """
-    use = True
-    if main_url is not None:
-        use = verify_url(url, main_url)
+    use = verify_url(url)
     logging.info("Requesting for {}".format(url))
     if use:
         response = requests.get(url)
@@ -109,7 +108,7 @@ def start_curation(urls: list, arxiv_url):
     for idx, url in enumerate(urls):
         if idx % 4 == 0:
             time.sleep(1)
-        content, status_code = get_content(url, main_url=arxiv_url)
+        content, status_code = get_content(url)
         if status_code == 200:
             title = find_title(content)
             abstract = find_abstract(content)
