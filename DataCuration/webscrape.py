@@ -18,6 +18,12 @@ def verify_url(url):
     return False
 
 
+def batch_not_processed(batch: int):
+    if os.path.exists(os.path.join(os.getcwd(), 'Curated_Data', 'curated_dataset_{}.csv'.format(batch))):
+        return False
+    return True
+
+
 def get_content(url):
     """
     Gets the content of the website parsed using html parser using Beautiful Soup.
@@ -157,9 +163,12 @@ def extract_content_list_wise(arxiv_url, url):
     urls = content.find_all('a')
     urls = [x.get('href') for x in urls if '/list/' in str(x)]
     urls = [url for url in urls if 'recent' not in url]
+    urls = [url for url in urls if '?' not in url]
     urls = [arxiv_url+x for x in urls]
-    for url in urls:
+    urls = list(set(urls))
+    for url in tqdm(urls, "Years"):
         _batch += 1
+        # if batch_not_processed(_batch):
         extract_arxiv_links(arxiv_url, url, _batch)
 
 
