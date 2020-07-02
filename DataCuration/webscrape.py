@@ -61,8 +61,8 @@ def extract_subjects(url, subjects: dict):
         return list()
     urls = content.find_all('a')
     if 'all' not in subjects.keys():
-        urls = [x.get('href') for x in urls if str(x.text).lower() in subjects.keys()]
-        if 'computing research repository' in subjects.keys():
+        urls = [x.get('href') for x in urls if str(x.text).lower() in subjects]
+        if 'computing research repository' in subjects:
             urls.remove('/corr')
             urls.append('/archive/cs')
     else:
