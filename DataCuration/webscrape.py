@@ -63,8 +63,8 @@ def extract_subjects(url, subjects: dict):
     if 'all' not in subjects.keys():
         urls = [x.get('href') for x in urls if str(x.text).lower() in subjects]
         if 'computing research repository' in subjects:
-            urls.remove('/corr')
-            urls.append('/archive/cs')
+            idx = urls.index('/corr')
+            urls[idx] = '/archive/cs'
     else:
         urls = [x.get('href') for x in urls if '/archive/' in str(x)]
         urls.append('/archive/cs')
@@ -184,12 +184,15 @@ def extract_content_list_wise(arxiv_url, url):
         extract_arxiv_links(arxiv_url, url, _batch)
 
 
-def extract_content_year_wise(arxiv_url, url):
+def extract_content_year_wise(arxiv_url, url, years):
     content, status_code = get_content(url)
     if status_code != 200:
         return
     urls = content.find_all('a')
-    urls = [x.get('href') for x in urls if '/year/' in str(x)]
+    if years is None:
+        urls = [x.get('href') for x in urls if '/year/' in str(x)]
+    else:
+        urls = [x.get('href') for x in urls if str(x.text).lower() in years]
     logging.info("Number of years found for {} is {}".format(url, len(urls)))
     urls = [arxiv_url+x for x in urls]
     for link in tqdm(urls, desc="Year for {}".format(url)):
