@@ -16,11 +16,12 @@ def verify_url(url):
     return False
 
 
-def get_content(url):
+def get_content(url, retry=0):
     """
     Gets the content of the website parsed using html parser using Beautiful Soup.
 
     :param url: URL to be parsed for.
+    :param retry: How many retries have happened
     :return: html code of the website and status code while accessing the website.
     """
     use = verify_url(url)
@@ -31,6 +32,14 @@ def get_content(url):
             status_code = int(response.status_code)
             if status_code != 200:
                 logging.info("GET request for URL {} returned status code of {}".format(url, status_code))
+                if status_code == 403:
+                    retry += 1
+                    if retry <= 5:
+                        logging.info("Retrying after 60 seconds")
+                        time.sleep(60)
+                        return get_content(url, retry=retry)
+                    else:
+                        raise TimeoutError("Waited for more than 5 minutes for server status to change, it didn't")
                 return None, status_code
             content = BeautifulSoup(response.text, 'html.parser')
             return content, status_code
@@ -121,7 +130,11 @@ def start_curation(urls: list, skip_size: int):
             continue
         if idx % 4 == 0:
             time.sleep(1)
-        content, status_code = get_content(url)
+        try:
+            content, status_code = get_content(url)
+        except TimeoutError:
+            logging.error("Timed out waiting for server to respond")
+            return curated_data
         if status_code == 200:
             title = find_title(content)
             abstract = find_abstract(content)
