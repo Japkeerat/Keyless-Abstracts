@@ -34,28 +34,40 @@ def get_content(url):
     use = verify_url(url)
     logging.info("Requesting for {}".format(url))
     if use:
-        response = requests.get(url)
-        status_code = int(response.status_code)
-        if status_code != 200:
-            logging.info("GET request for URL {} returned status code of {}".format(url, status_code))
-            return None, status_code
-        content = BeautifulSoup(response.text, 'html.parser')
-        return content, status_code
+        try:
+            response = requests.get(url)
+            status_code = int(response.status_code)
+            if status_code != 200:
+                logging.info("GET request for URL {} returned status code of {}".format(url, status_code))
+                return None, status_code
+            content = BeautifulSoup(response.text, 'html.parser')
+            return content, status_code
+        except requests.exceptions.ConnectionError:
+            logging.error("Connection failed for {}".format(url))
     return None, 404
 
 
-def extract_subjects(url):
+def extract_subjects(url, subjects: dict):
     """
     Finds all the hyperlinks associated to the subjects.
 
     :param url: Main url of the ARXIV website
+    :param subjects: dictionary of subjects for which url is needed where keys is subject name and value is list of years
+    for which data needs to be extracted
     :return: List of urls related to subjects
     """
     content, status_code = get_content(url)
     if status_code != 200:
         return list()
     urls = content.find_all('a')
-    urls = [x.get('href') for x in urls if '/archive/' in str(x)]
+    if 'all' not in subjects.keys():
+        urls = [x.get('href') for x in urls if str(x.text).lower() in subjects.keys()]
+        if 'computing research repository' in subjects.keys():
+            urls.remove('/corr')
+            urls.append('/archive/cs')
+    else:
+        urls = [x.get('href') for x in urls if '/archive/' in str(x)]
+        urls.append('/archive/cs')
     urls = [url+x for x in urls]
     return urls
 
@@ -101,7 +113,7 @@ def save_curated_data(content: dict, batch: int):
     df.to_csv(os.path.join(root_path, 'curated_dataset_{}.csv'.format(batch)), index=False)
 
 
-def start_curation(urls: list, arxiv_url):
+def start_curation(urls: list):
     """
     Curates data from the webpages from a given list of urls
     """
@@ -151,7 +163,7 @@ def extract_arxiv_links(arxiv_url, url, batch):
     urls = [x.get('href') for x in urls if '/abs/' in str(x)]
     urls = [arxiv_url+x for x in urls]
     time.sleep(1)
-    curated_data = start_curation(urls, arxiv_url)
+    curated_data = start_curation(urls)
     save_curated_data(curated_data, batch)
 
 

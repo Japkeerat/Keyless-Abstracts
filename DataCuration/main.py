@@ -14,7 +14,7 @@ def main(config):
     :param config:  YAML config file content
     :return: None
     """
-    url_list = extract_subjects(config['Arxiv_Website'])
+    url_list = extract_subjects(config['Arxiv_Website'], config['Subjects'])
     logging.info("Number of subjects found is {}".format(len(url_list)))
     if len(url_list) != 0:
         for url in tqdm(url_list, desc="Subjects"):
@@ -36,6 +36,6 @@ if __name__ == "__main__":
                                '%(message)s')
     conf = {
         "Arxiv_Website": "http://export.arxiv.org",
-        "Subjects": ["all"],
+        "Subjects": {"all": ["all"]},
     }
     main(conf)
