@@ -192,7 +192,8 @@ def extract_content_year_wise(arxiv_url, url, years):
     if years is None:
         urls = [x.get('href') for x in urls if '/year/' in str(x)]
     else:
-        urls = [x.get('href') for x in urls if str(x.text).lower() in years]
+        years = [str(x) for x in years]
+        urls = [x.get('href') for x in urls if str(x.text) in years and '/year/' in str(x)]
     logging.info("Number of years found for {} is {}".format(url, len(urls)))
     urls = [arxiv_url+x for x in urls]
     for link in tqdm(urls, desc="Year for {}".format(url)):
