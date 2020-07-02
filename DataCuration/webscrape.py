@@ -9,19 +9,11 @@ from tqdm.cli import tqdm
 
 from util import create_folder
 
-_batch = 0
-
 
 def verify_url(url):
     if url.count('//') == 1:
         return True
     return False
-
-
-def batch_not_processed(batch: int):
-    if os.path.exists(os.path.join(os.getcwd(), 'Curated_Data', 'curated_dataset_{}.csv'.format(batch))):
-        return False
-    return True
 
 
 def get_content(url):
@@ -99,21 +91,22 @@ def find_subject(content):
     return subject
 
 
-def save_curated_data(content: dict, batch: int):
+def save_curated_data(content: dict, metadata: dict):
     """
     Creates a CSV file for the content extracted from 25 papers.
 
     :param content: Data extracted from 25 paper
-    :param batch: Batch ID.
+    :param metadata: Other relevant information
     :return: None
     """
     df = pd.DataFrame(content)
     root_path = os.path.join(os.getcwd(), 'Curated_Data')
     create_folder(root_path)
-    df.to_csv(os.path.join(root_path, 'curated_dataset_{}.csv'.format(batch)), index=False)
+    df.to_csv(os.path.join(root_path, '{}_{}_{}.csv'.format(metadata['Subject'], metadata['Month'], metadata['Year'])),
+              index=False)
 
 
-def start_curation(urls: list):
+def start_curation(urls: list, skip_size: int):
     """
     Curates data from the webpages from a given list of urls
     """
@@ -124,6 +117,8 @@ def start_curation(urls: list):
         'Subjects': [],
     }
     for idx, url in enumerate(urls):
+        if idx < skip_size:
+            continue
         if idx % 4 == 0:
             time.sleep(1)
         content, status_code = get_content(url)
@@ -145,7 +140,44 @@ def extract_all_tag_link(arxiv_url, content):
     return url
 
 
-def extract_arxiv_links(arxiv_url, url, batch):
+def extract_metadata(url):
+    metadata = {
+        "Subject": None,
+        "Year": None,
+        "Month": None,
+    }
+    content, status_code = get_content(url)
+    if status_code != 200:
+        return metadata
+    subject_info_section = content.find_all("div", attrs={"id": "dlpage"})
+    if len(subject_info_section) > 1:
+        logging.exception("Something wrong with {}, found more than 1 headers for subject name".format(url))
+    subject = subject_info_section[0].find('h1').text
+    month_year_info = subject_info_section[0].find('h2').text
+    info = month_year_info.split()
+    year = info[-1]
+    month = info[-2]
+    metadata['Subject'] = subject
+    metadata['Year'] = year
+    metadata['Month'] = month
+    return metadata
+
+
+def already_processed(metadata, url):
+    filename = os.path.join(os.path.join(os.getcwd(), 'Curated_Data'), "{}_{}_{}.csv".format(metadata['Subject'],
+                                                                                             metadata['Month'],
+                                                                                             metadata['Year']))
+    if os.path.exists(filename):
+        data = pd.read_csv(filename)
+        size = len(data)
+        total = int(url.split('=')[-1])
+        if size != total:
+            return False, size
+        return True, 0
+    return False, 0
+
+
+def extract_arxiv_links(arxiv_url, url):
     """
     Responsible for extracting arxiv links from the website
     """
@@ -153,22 +185,23 @@ def extract_arxiv_links(arxiv_url, url, batch):
     if status_code != 200:
         return
     url = extract_all_tag_link(arxiv_url, content)
+    metadata = extract_metadata(url)
     if 'pastweek' in url:
         raise AttributeError("Found wrong URL")
-
-    content, status_code = get_content(url)
-    if status_code != 200:
-        return
-    urls = content.find_all('a')
-    urls = [x.get('href') for x in urls if '/abs/' in str(x)]
-    urls = [arxiv_url+x for x in urls]
-    time.sleep(1)
-    curated_data = start_curation(urls)
-    save_curated_data(curated_data, batch)
+    processed, skip_size = already_processed(metadata, url)
+    if not processed:
+        content, status_code = get_content(url)
+        if status_code != 200:
+            return
+        urls = content.find_all('a')
+        urls = [x.get('href') for x in urls if '/abs/' in str(x)]
+        urls = [arxiv_url+x for x in urls]
+        time.sleep(1)
+        curated_data = start_curation(urls, skip_size)
+        save_curated_data(curated_data, metadata)
 
 
 def extract_content_list_wise(arxiv_url, url):
-    global _batch
     content, status_code = get_content(url)
     if status_code != 200:
         return
@@ -179,9 +212,7 @@ def extract_content_list_wise(arxiv_url, url):
     urls = [arxiv_url+x for x in urls]
     urls = list(set(urls))
     for url in tqdm(urls, "Years"):
-        _batch += 1
-        # if batch_not_processed(_batch):
-        extract_arxiv_links(arxiv_url, url, _batch)
+        extract_arxiv_links(arxiv_url, url)
 
 
 def extract_content_year_wise(arxiv_url, url, years):
